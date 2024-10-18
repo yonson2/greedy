@@ -1,13 +1,13 @@
-use std::error::Error;
+use greedy::{config, error::Error, http};
 
-mod config;
+#[tokio::main]
+async fn main() -> Result<(), Error> {
+    tracing_subscriber::fmt()
+        .with_max_level(tracing::Level::DEBUG)
+        .init();
 
-fn main() -> Result<(), Box<dyn Error>> {
-    tracing_subscriber::fmt::init();
-    tracing::info!("Hello, world!");
-
-    let c = config::Config::new()?;
-    tracing::info!("{:#?}", &c.whitelist);
+    let c = config::Config::new().expect("Valid configuration");
+    http::serve(c).await.unwrap();
 
     Ok(())
 }
