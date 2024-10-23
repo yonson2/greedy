@@ -5,10 +5,16 @@ use config::{Config as C, ConfigError, File};
 use serde::Deserialize;
 
 #[derive(Debug, Deserialize)]
+pub struct Cache {
+    pub capacity: u64,
+}
+
+#[derive(Debug, Deserialize)]
 pub struct Config {
     pub host: String,
-    pub port: String,
+    pub port: u16,
     pub whitelist: Vec<String>,
+    pub cache: Cache,
 }
 
 impl Config {

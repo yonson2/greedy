@@ -1,4 +1,4 @@
-use crate::config::Config;
+use crate::{cache, config::Config};
 use axum::{http::StatusCode, routing::get, Json, Router};
 use serde::{Deserialize, Serialize};
 use tower_http::trace::TraceLayer;
@@ -10,11 +10,11 @@ pub type Result<T, E = crate::error::Error> = std::result::Result<T, E>;
 ///
 /// # Errors
 /// # Panics
-///  - When setting up a `tokio` `TcpListener`
-///  - When serving our app through `axum`
+///  - When setting up an invalid `tokio` `TcpListener`
+///  - When `axum` can't serve our app.
 pub async fn serve(config: Config) -> Result<()> {
-    let app = routes().layer(TraceLayer::new_for_http());
-    let listener = tokio::net::TcpListener::bind(format!("{}:{}", config.host, config.port))
+    let app = routes(&config).layer(TraceLayer::new_for_http());
+    let listener = tokio::net::TcpListener::bind(format!("{}:{}", &config.host, config.port))
         .await
         .unwrap();
 
@@ -23,8 +23,10 @@ pub async fn serve(config: Config) -> Result<()> {
     Ok(())
 }
 
-fn routes() -> Router {
-    Router::new().route("/", get(index))
+fn routes(config: &Config) -> Router {
+    Router::new()
+        .route("/", get(index))
+        .with_state(cache::new(&config.cache))
 }
 
 async fn index() -> (StatusCode, Json<ApiMessage>) {

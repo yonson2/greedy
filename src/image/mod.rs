@@ -19,27 +19,51 @@ fn download_image(url: &str) -> Result<Vec<u8>, Error> {
     Ok(buffer)
 }
 
-fn convert_file(file: &[u8], to: Format) -> Result<Vec<u8>, Error> {
+/// `convert` converts the `Format` of a given image from its underliying format
+/// to the given one.
+fn convert(file: &[u8], to: &Format) -> Result<Vec<u8>, Error> {
     let img = load_from_memory(file)?;
     let mut converted_img: Cursor<Vec<u8>> = Cursor::new(Vec::new());
     img.write_to(&mut converted_img, to.into())?;
     Ok(converted_img.get_ref().clone())
 }
 
-//TODO: tests?
 /// `resize_image` scales _*down*_ the given image.
-fn resize_image(file: &[u8], d: Dimension) -> Result<Vec<u8>, Error> {
+fn resize(file: &[u8], d: &Dimension) -> Result<Vec<u8>, Error> {
     let img = load_from_memory(file)?;
     let (width, height) = match d {
-        Dimension(Some(Width(w)), Some(Height(h))) => (w, h),
-        Dimension(Some(Width(w)), None) => (w, img.height()),
-        Dimension(None, Some(Height(h))) => (img.width(), h),
+        Dimension(Some(Width(w)), Some(Height(h))) => (*w, *h),
+        Dimension(Some(Width(w)), None) => (*w, img.height()),
+        Dimension(None, Some(Height(h))) => (img.width(), *h),
         Dimension(None, None) => return Err(Error::ResizeEmptyDimension),
     };
     let img = img.thumbnail(width, height);
     let mut resized_img: Cursor<Vec<u8>> = Cursor::new(Vec::new());
     img.write_to(&mut resized_img, guess_format(file)?)?;
     Ok(resized_img.get_ref().clone())
+}
+
+pub enum Operation {
+    Convert(Format),
+    Resize(Dimension),
+}
+
+/// `transform` performs all needed operations on an image (byte slice)
+pub fn transform(file: &[u8], op: &[Operation]) -> Result<Vec<u8>, Error> {
+    op.iter().try_fold(Vec::with_capacity(0), |acc, o| {
+        // don't use accumulator on our first pass
+        // and check that the passed value is a valid image
+        // this results in a small overhead
+        // (compared to just checking for a non-empty file)
+        // in this case its probably an overkill.
+        guess_format(file)?;
+        let acc = if acc.is_empty() { file } else { &acc };
+
+        match o {
+            Operation::Convert(f) => convert(acc, f),
+            Operation::Resize(s) => resize(acc, s),
+        }
+    })
 }
 
 #[derive(Clone, Copy, Debug)]
@@ -60,8 +84,8 @@ impl Display for Format {
     }
 }
 
-impl From<Format> for image::ImageFormat {
-    fn from(value: Format) -> Self {
+impl From<&Format> for image::ImageFormat {
+    fn from(value: &Format) -> Self {
         match value {
             Format::Avif => image::ImageFormat::Avif,
             Format::Png => image::ImageFormat::Png,
@@ -71,11 +95,11 @@ impl From<Format> for image::ImageFormat {
 }
 
 #[derive(Clone, Copy, Debug)]
-struct Width(u32);
+pub struct Width(u32);
 #[derive(Clone, Copy, Debug)]
-struct Height(u32);
+pub struct Height(u32);
 #[derive(Clone, Debug)]
-struct Dimension(Option<Width>, Option<Height>);
+pub struct Dimension(Option<Width>, Option<Height>);
 
 //TODO: refacor into a macro?
 impl Display for Width {
@@ -186,7 +210,7 @@ mod test {
         let file = download_image("https://placehold.co/1x1.png")?;
 
         for format in [Format::Avif, Format::Webp, Format::Png].iter() {
-            let new_file = convert_file(&file, *format);
+            let new_file = convert(&file, format);
             assert!(new_file.is_ok());
         }
 
@@ -198,7 +222,7 @@ mod test {
         let file = download_image("https://raw.githubusercontent.com/link-u/avif-sample-images/refs/heads/master/kimono.avif")?;
 
         for format in [Format::Png, Format::Webp].iter() {
-            let new_file = convert_file(&file, *format);
+            let new_file = convert(&file, format);
             assert!(new_file.is_ok());
         }
 
@@ -209,7 +233,7 @@ mod test {
         let file = download_image("https://placehold.co/1x1.webp")?;
 
         for format in [Format::Png, Format::Avif, Format::Webp].iter() {
-            let new_file = convert_file(&file, *format);
+            let new_file = convert(&file, format);
             assert!(new_file.is_ok());
         }
 
