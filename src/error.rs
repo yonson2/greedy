@@ -10,6 +10,8 @@ pub enum Error {
     IO(#[from] io::Error),
     #[error("Conversion error")]
     Conversion(#[from] image::ImageError),
+    #[error("Missing dimensions to resize")]
+    ResizeEmptyDimension,
     #[error("Unknown error")]
     Unknown,
 }
