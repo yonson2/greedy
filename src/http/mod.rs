@@ -1,16 +1,7 @@
 mod processor;
 
-use crate::{
-    cache,
-    config::Config,
-    image::{Format, Height, Width},
-};
-use axum::{
-    extract::{Path, Query},
-    http::StatusCode,
-    routing::get,
-    Json, Router,
-};
+use crate::{cache, config::Config};
+use axum::{http::StatusCode, routing::get, Json, Router};
 use processor::process_and_serve;
 use serde::{Deserialize, Serialize};
 use tower_http::trace::TraceLayer;

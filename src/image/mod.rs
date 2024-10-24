@@ -5,9 +5,12 @@ use serde::Deserialize;
 
 use crate::error::Error;
 
-/// `download_image` is a little helper function that takes a url and returns
+/// `download` is a little helper function that takes a url and returns
 /// a Vec<u8> with its contents.
-pub fn download_image(url: &str) -> Result<Vec<u8>, Error> {
+/// # Errors
+/// - When performing ureq request
+/// - When saving the file to a buffer
+pub fn download(url: &str) -> Result<Vec<u8>, Error> {
     // Send a GET request to download the image
     let response = ureq::get(url).call().map_err(|e| {
         tracing::error!(error = e.to_string(), "Error downloading image");
@@ -22,7 +25,7 @@ pub fn download_image(url: &str) -> Result<Vec<u8>, Error> {
 
 /// `convert` converts the `Format` of a given image from its underliying format
 /// to the given one.
-fn convert(file: &[u8], to: &Format) -> Result<Vec<u8>, Error> {
+fn convert(file: &[u8], to: Format) -> Result<Vec<u8>, Error> {
     let img = load_from_memory(file)?;
     let mut converted_img: Cursor<Vec<u8>> = Cursor::new(Vec::new());
     img.write_to(&mut converted_img, to.into())?;
@@ -50,6 +53,8 @@ pub enum Operation {
 }
 
 /// `transform` performs all needed operations on an image (byte slice)
+/// # Errors
+/// - When trying to guess the image format
 pub fn transform(file: &[u8], op: &[Operation]) -> Result<Vec<u8>, Error> {
     op.iter().try_fold(Vec::with_capacity(0), |acc, o| {
         // don't use accumulator on our first pass
@@ -61,7 +66,7 @@ pub fn transform(file: &[u8], op: &[Operation]) -> Result<Vec<u8>, Error> {
         let acc = if acc.is_empty() { file } else { &acc };
 
         match o {
-            Operation::Convert(f) => convert(acc, f),
+            Operation::Convert(f) => convert(acc, *f),
             Operation::Resize(s) => resize(acc, s),
         }
     })
@@ -76,7 +81,8 @@ pub enum Format {
 }
 
 impl Format {
-    pub fn content_type(&self) -> &str {
+    #[must_use]
+    pub const fn content_type(&self) -> &str {
         match self {
             Self::Avif => "image/avif",
             Self::Webp => "image/webp",
@@ -96,12 +102,12 @@ impl Display for Format {
     }
 }
 
-impl From<&Format> for image::ImageFormat {
-    fn from(value: &Format) -> Self {
+impl From<Format> for image::ImageFormat {
+    fn from(value: Format) -> Self {
         match value {
-            Format::Avif => image::ImageFormat::Avif,
-            Format::Png => image::ImageFormat::Png,
-            Format::Webp => image::ImageFormat::WebP,
+            Format::Avif => Self::Avif,
+            Format::Png => Self::Png,
+            Format::Webp => Self::WebP,
         }
     }
 }
@@ -138,21 +144,20 @@ impl Display for Dimension {
     }
 }
 
-/// `SavedImage` holds the info about an image saved in cache.
+/// `Saved` holds the info about an image saved in cache.
 #[derive(Clone, Debug)]
-pub struct SavedImage {
+pub struct Saved {
     pub url: String,
     pub dimensions: Dimension,
     pub format: Option<Format>,
 }
 
 //TODO: implement fromstr for savedimage to revert this process?
-impl Display for SavedImage {
+impl Display for Saved {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
-        let format = match self.format {
-            Some(f) => &f.to_string(),
-            None => "original",
-        };
+        let format = self
+            .format
+            .map_or("original".to_string(), |f| f.to_string());
         write!(f, "{}_{}_{format}", self.url, self.dimensions)
     }
 }
@@ -191,7 +196,7 @@ mod test {
         }
     }
 
-    impl quickcheck::Arbitrary for SavedImage {
+    impl quickcheck::Arbitrary for Saved {
         fn arbitrary(g: &mut quickcheck::Gen) -> Self {
             Self {
                 url: String::arbitrary(g),
@@ -202,7 +207,7 @@ mod test {
     }
 
     quickcheck::quickcheck! {
-        fn saved_image_display(image: SavedImage) -> bool {
+        fn saved_image_display(image: Saved) -> bool {
             !image.to_string().is_empty()
         }
     }
@@ -210,7 +215,7 @@ mod test {
     #[test]
     fn download() -> Result<(), Error> {
         let url = "https://placehold.co/1x1";
-        let file = download_image(url)?;
+        let file = download(url)?;
 
         assert!(!file.is_empty());
         Ok(())
@@ -218,10 +223,10 @@ mod test {
 
     #[test]
     fn convert_png() -> Result<(), Error> {
-        let file = download_image("https://placehold.co/1x1.png")?;
+        let file = download("https://placehold.co/1x1.png")?;
 
         for format in [Format::Avif, Format::Webp, Format::Png].iter() {
-            let new_file = convert(&file, format);
+            let new_file = convert(&file, *format);
             assert!(new_file.is_ok());
         }
 
@@ -230,10 +235,10 @@ mod test {
     // BUG: avif to avif hangs infinitely
     #[test]
     fn convert_avif() -> Result<(), Error> {
-        let file = download_image("https://raw.githubusercontent.com/link-u/avif-sample-images/refs/heads/master/kimono.avif")?;
+        let file = download("https://raw.githubusercontent.com/link-u/avif-sample-images/refs/heads/master/kimono.avif")?;
 
         for format in [Format::Png, Format::Webp].iter() {
-            let new_file = convert(&file, format);
+            let new_file = convert(&file, *format);
             assert!(new_file.is_ok());
         }
 
@@ -241,10 +246,10 @@ mod test {
     }
     #[test]
     fn convert_webp() -> Result<(), Error> {
-        let file = download_image("https://placehold.co/1x1.webp")?;
+        let file = download("https://placehold.co/1x1.webp")?;
 
         for format in [Format::Png, Format::Avif, Format::Webp].iter() {
-            let new_file = convert(&file, format);
+            let new_file = convert(&file, *format);
             assert!(new_file.is_ok());
         }
 
@@ -252,31 +257,31 @@ mod test {
     }
     #[test]
     fn saved_images_naming() {
-        let all_defined = SavedImage {
+        let all_defined = Saved {
             url: "localhost".to_string(),
             dimensions: Dimension(Some(Width(10)), Some(Height(10))),
             format: Some(Format::Avif),
         };
 
-        let no_size = SavedImage {
+        let no_size = Saved {
             url: "localhost".to_string(),
             dimensions: Dimension(None, None),
             format: Some(Format::Avif),
         };
 
-        let no_format = SavedImage {
+        let no_format = Saved {
             url: "localhost".to_string(),
             dimensions: Dimension(None, None),
             format: None,
         };
 
-        let no_height = SavedImage {
+        let no_height = Saved {
             url: "localhost".to_string(),
             dimensions: Dimension(Some(Width(100)), None),
             format: Some(Format::Png),
         };
 
-        let no_width = SavedImage {
+        let no_width = Saved {
             url: "localhost".to_string(),
             dimensions: Dimension(None, Some(Height(100))),
             format: Some(Format::Webp),
