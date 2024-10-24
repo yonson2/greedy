@@ -1,12 +1,13 @@
 use std::{fmt::Display, io::Cursor};
 
 use image::{guess_format, load_from_memory};
+use serde::Deserialize;
 
 use crate::error::Error;
 
 /// `download_image` is a little helper function that takes a url and returns
 /// a Vec<u8> with its contents.
-fn download_image(url: &str) -> Result<Vec<u8>, Error> {
+pub fn download_image(url: &str) -> Result<Vec<u8>, Error> {
     // Send a GET request to download the image
     let response = ureq::get(url).call().map_err(|e| {
         tracing::error!(error = e.to_string(), "Error downloading image");
@@ -66,11 +67,22 @@ pub fn transform(file: &[u8], op: &[Operation]) -> Result<Vec<u8>, Error> {
     })
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Deserialize)]
+#[serde(rename_all = "lowercase")]
 pub enum Format {
     Avif,
     Png,
     Webp,
+}
+
+impl Format {
+    pub fn content_type(&self) -> &str {
+        match self {
+            Self::Avif => "image/avif",
+            Self::Webp => "image/webp",
+            Self::Png => "image/png",
+        }
+    }
 }
 
 impl Display for Format {
@@ -94,12 +106,12 @@ impl From<&Format> for image::ImageFormat {
     }
 }
 
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct Width(u32);
-#[derive(Clone, Copy, Debug)]
+#[derive(Clone, Copy, Debug, Deserialize)]
 pub struct Height(u32);
-#[derive(Clone, Debug)]
-pub struct Dimension(Option<Width>, Option<Height>);
+#[derive(Clone, Debug, Deserialize)]
+pub struct Dimension(pub Option<Width>, pub Option<Height>);
 
 //TODO: refacor into a macro?
 impl Display for Width {
@@ -128,13 +140,13 @@ impl Display for Dimension {
 
 /// `SavedImage` holds the info about an image saved in cache.
 #[derive(Clone, Debug)]
-struct SavedImage {
-    url: String,
-    data: Vec<u8>,
-    dimensions: Dimension,
-    format: Option<Format>,
+pub struct SavedImage {
+    pub url: String,
+    pub dimensions: Dimension,
+    pub format: Option<Format>,
 }
 
+//TODO: implement fromstr for savedimage to revert this process?
 impl Display for SavedImage {
     fn fmt(&self, f: &mut std::fmt::Formatter<'_>) -> std::fmt::Result {
         let format = match self.format {
@@ -183,7 +195,6 @@ mod test {
         fn arbitrary(g: &mut quickcheck::Gen) -> Self {
             Self {
                 url: String::arbitrary(g),
-                data: Vec::arbitrary(g),
                 dimensions: Dimension::arbitrary(g),
                 format: Option::arbitrary(g),
             }
@@ -244,35 +255,30 @@ mod test {
         let all_defined = SavedImage {
             url: "localhost".to_string(),
             dimensions: Dimension(Some(Width(10)), Some(Height(10))),
-            data: Vec::new(),
             format: Some(Format::Avif),
         };
 
         let no_size = SavedImage {
             url: "localhost".to_string(),
             dimensions: Dimension(None, None),
-            data: Vec::new(),
             format: Some(Format::Avif),
         };
 
         let no_format = SavedImage {
             url: "localhost".to_string(),
             dimensions: Dimension(None, None),
-            data: Vec::new(),
             format: None,
         };
 
         let no_height = SavedImage {
             url: "localhost".to_string(),
             dimensions: Dimension(Some(Width(100)), None),
-            data: Vec::new(),
             format: Some(Format::Png),
         };
 
         let no_width = SavedImage {
             url: "localhost".to_string(),
             dimensions: Dimension(None, Some(Height(100))),
-            data: Vec::new(),
             format: Some(Format::Webp),
         };
 

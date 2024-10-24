@@ -1,5 +1,17 @@
-use crate::{cache, config::Config};
-use axum::{http::StatusCode, routing::get, Json, Router};
+mod processor;
+
+use crate::{
+    cache,
+    config::Config,
+    image::{Format, Height, Width},
+};
+use axum::{
+    extract::{Path, Query},
+    http::StatusCode,
+    routing::get,
+    Json, Router,
+};
+use processor::process_and_serve;
 use serde::{Deserialize, Serialize};
 use tower_http::trace::TraceLayer;
 
@@ -26,6 +38,7 @@ pub async fn serve(config: Config) -> Result<()> {
 fn routes(config: &Config) -> Router {
     Router::new()
         .route("/", get(index))
+        .route("/*url", get(process_and_serve))
         .with_state(cache::new(&config.cache))
 }
 

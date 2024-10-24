@@ -7,6 +7,6 @@ pub type Cache = InnerCache<String, Vec<u8>>;
 pub fn new(c: &crate::config::Cache) -> Cache {
     Cache::builder()
         .weigher(|_key, value: &Vec<u8>| size_of_val(value).try_into().unwrap_or(u32::MAX))
-        .max_capacity(c.capacity) // 1GiB
+        .max_capacity(c.capacity)
         .build()
 }
