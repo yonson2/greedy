@@ -213,7 +213,7 @@ mod test {
     }
 
     #[test]
-    fn download() -> Result<(), Error> {
+    fn download_image() -> Result<(), Error> {
         let url = "https://placehold.co/1x1";
         let file = download(url)?;
 
