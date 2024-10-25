@@ -16,6 +16,8 @@ pub enum Error {
     ResizeEmptyDimension,
     #[error("Invalid file format")]
     InvalidImageFormat,
+    #[error("Host not allowed")]
+    HostNotAllowed,
     #[error("Unknown error")]
     Unknown,
 }

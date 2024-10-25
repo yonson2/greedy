@@ -2,30 +2,28 @@ use axum::{
     debug_handler,
     extract::{Path, Query, State},
     http::{header, StatusCode},
-    response::{IntoResponse, Response},
+    response::IntoResponse,
 };
 use image::{guess_format, ImageFormat};
 use serde::Deserialize;
 
 use crate::{
-    cache::Cache,
     error::Error,
     http::Result,
     image::{download, transform, Dimension, Format, Height, Operation, Saved, Width},
 };
 
+use super::ApiState;
+
 #[debug_handler]
 pub async fn process_and_serve(
     Path(url): Path<String>,
     Query(opts): Query<ImageOptions>,
-    State(cache): State<Cache>,
-) -> Result<Response> {
-    // Steps:
-    // 1: try to get from cache
-    // 2: download image
-    // 3: transform image (get operations from query)
-    // 4: save to cache
+    State(state): State<ApiState>,
+) -> Result<impl IntoResponse> {
+    allowed_host(&url, &state.whitelist)?;
 
+    let cache = state.cache;
     // construct our savedimage from the request.
     let img = Saved {
         url: url.to_string(),
@@ -33,19 +31,24 @@ pub async fn process_and_serve(
         format: opts.format,
     };
 
-    let data = if let Some(i) = cache.get(&img.to_string()).await {
+    // check cache or save to cache.
+    let key = img.to_string();
+    let data = if let Some(i) = cache.get(&key).await {
         i
     } else {
         let operations = get_operations(&opts);
         let data = transform(&download(&url)?, &operations)?;
-        cache.insert(img.to_string(), data.clone()).await;
+        cache.insert(key, data.clone()).await;
         data
     };
 
-    let content_type = guess_content_type(&data)?;
+    let content_type = if let Some(f) = img.format {
+        f.content_type().to_string()
+    } else {
+        guess_content_type(&data)?
+    };
     let headers = [(header::CONTENT_TYPE, content_type)];
-    let response = (StatusCode::OK, headers, data);
-    Ok(response.into_response())
+    Ok((StatusCode::OK, headers, data))
 }
 
 #[derive(Deserialize, Debug)]
@@ -81,4 +84,22 @@ fn get_operations(opts: &ImageOptions) -> Vec<Operation> {
         _ => operations.push(Operation::Resize(Dimension(opts.width, opts.height))),
     }
     operations
+}
+
+fn allowed_host(url: &str, whitelist: &[String]) -> Result<(), Error> {
+    let parsed = url::Url::parse(url).map_err(|e| {
+        tracing::error!(
+            error = e.to_string(),
+            "Error parsing url to check whitelist"
+        );
+        Error::HostNotAllowed
+    })?;
+
+    let host = parsed.host_str().unwrap_or("");
+
+    if whitelist.iter().any(|h| h == host) {
+        Ok(())
+    } else {
+        Err(Error::HostNotAllowed)
+    }
 }
