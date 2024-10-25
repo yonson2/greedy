@@ -4,11 +4,11 @@ WORKDIR /usr/src/
 
 COPY . .
 
-RUN apt update -y && apt install nodejs npm -y
+RUN apt update -y && apt install nodejs npm dav1d -y
 RUN cargo build --release
 
 FROM debian:bookworm-slim
-RUN apt update -y && apt install curl wget -y
+RUN apt update -y && apt install curl wget htop vim -y
 
 WORKDIR /usr/app
 
