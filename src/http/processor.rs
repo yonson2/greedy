@@ -1,8 +1,8 @@
 use axum::{
-    debug_handler,
     extract::{Path, Query, State},
     http::{header, StatusCode},
     response::IntoResponse,
+    Json,
 };
 use image::{guess_format, ImageFormat};
 use serde::Deserialize;
@@ -13,23 +13,19 @@ use crate::{
     image::{download, transform, Dimension, Format, Height, Operation, Saved, Width},
 };
 
-use super::ApiState;
+use super::{ApiMessage, ApiState};
 
-#[debug_handler]
 pub async fn process_and_serve(
     Path(url): Path<String>,
     Query(opts): Query<ImageOptions>,
     State(state): State<ApiState>,
 ) -> Result<impl IntoResponse> {
+    //TODO: turn this into a middleware.
     allowed_host(&url, &state.whitelist)?;
 
     let cache = state.cache;
     // construct our savedimage from the request.
-    let img = Saved {
-        url: url.to_string(),
-        dimensions: Dimension(opts.width, opts.height),
-        format: opts.format,
-    };
+    let img = get_saved_image(&url, opts.width, opts.height, opts.format);
 
     // check cache or save to cache.
     let key = img.to_string();
@@ -49,6 +45,29 @@ pub async fn process_and_serve(
     };
     let headers = [(header::CONTENT_TYPE, content_type)];
     Ok((StatusCode::OK, headers, data))
+}
+
+pub async fn preload(
+    Path(url): Path<String>,
+    Query(opts): Query<ImageOptions>,
+    State(state): State<ApiState>,
+) -> Result<impl IntoResponse> {
+    allowed_host(&url, &state.whitelist)?;
+    let cache = state.cache;
+    let img = get_saved_image(&url, opts.width, opts.height, opts.format);
+    let key = img.to_string();
+    if cache.get(&key).await.is_none() {
+        let operations = get_operations(&opts);
+        let data = transform(&download(&url)?, &operations)?;
+        cache.insert(key, data.clone()).await;
+    }
+
+    Ok((
+        StatusCode::OK,
+        Json(ApiMessage {
+            message: "OK".to_string(),
+        }),
+    ))
 }
 
 #[derive(Deserialize, Debug)]
@@ -101,5 +120,18 @@ fn allowed_host(url: &str, whitelist: &[String]) -> Result<(), Error> {
         Ok(())
     } else {
         Err(Error::HostNotAllowed)
+    }
+}
+
+fn get_saved_image(
+    url: &str,
+    width: Option<Width>,
+    height: Option<Height>,
+    format: Option<Format>,
+) -> Saved {
+    Saved {
+        url: url.to_owned(),
+        dimensions: Dimension(width, height),
+        format,
     }
 }

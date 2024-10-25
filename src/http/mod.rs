@@ -5,7 +5,7 @@ use crate::{
     config::Config,
 };
 use axum::{http::StatusCode, routing::get, Json, Router};
-use processor::process_and_serve;
+use processor::{preload, process_and_serve};
 use serde::{Deserialize, Serialize};
 use tower_http::trace::TraceLayer;
 
@@ -39,6 +39,7 @@ fn routes(state: ApiState) -> Router {
     Router::new()
         .route("/", get(index))
         .route("/*url", get(process_and_serve))
+        .route("/preload/*url", get(preload))
         .with_state(state)
 }
 
@@ -52,7 +53,7 @@ async fn index() -> (StatusCode, Json<ApiMessage>) {
 }
 
 #[derive(Serialize, Deserialize, Debug)]
-struct ApiMessage {
+pub struct ApiMessage {
     message: String,
 }
 

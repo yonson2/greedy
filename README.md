@@ -62,18 +62,11 @@ This is the main endpoint of the app, fetches the image found on `:url` and
 resizes/transforms the image if any combination of the query parameters
 are provided, otherwise it will just cache the image as is.
 
-### POST: /preload
+### GET: /preload/:url
 
-Accepts a json body with the following payload:
-
-```json
-{
-  "url": "https://the_url_of_your_image",
-  "width": 500 //optional,
-  "height": 500 //optional,
-  "format": "png" //optional,
-}
-```
+Optional query parameters: `width`, `height` and `format`
 
 This acts as if a request to the get endpoint came in, preparing the image and
 inserting it in the cache, making it so sub-sequent requests will load faster.
+
+This endpoint doesn't return the image.
