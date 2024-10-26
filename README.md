@@ -47,10 +47,10 @@ Take a look into `config/default.toml` and modify to your needs, its specially
 important that you modify the `whitelist` parameter, otherwise the images
 you try to send to it will get rejected.
 
-Configuration parameters can be overwritten via environment variables or
-environment-based configuration files, that is, if `RUST_ENV` is set to
-`production` greedy will look for a configuration file
-`config/production.toml` in the working directory of the app.
+Configuration parameters can be overwritten via environment variables
+(using the `GREEDY_` prefix) or environment-based configuration files,
+that is, if `RUST_ENV` is set to `production` greedy will look for a
+configuration file `config/production.toml` in the working directory of the app.
 
 ## Endpoints
 
@@ -62,7 +62,7 @@ This is the main endpoint of the app, fetches the image found on `:url` and
 resizes/transforms the image if any combination of the query parameters
 are provided, otherwise it will just cache the image as is.
 
-### GET: /preload/:url
+### GET: `/preload/:url`
 
 Optional query parameters: `width`, `height` and `format`
 
@@ -70,3 +70,24 @@ This acts as if a request to the get endpoint came in, preparing the image and
 inserting it in the cache, making it so sub-sequent requests will load faster.
 
 This endpoint doesn't return the image.
+
+example response:
+
+```json
+{
+  "message": "OK"
+}
+```
+
+### GET: `/stats`
+
+Returns some statistics about the server.
+
+example response:
+
+```json
+{
+  "size": "29 MiB/1024 MiB",
+  "entries": 223
+}
+```

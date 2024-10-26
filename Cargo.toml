@@ -19,3 +19,4 @@ ureq = { version = "2.10.1", features = ["json"] }
 moka = { version = "0.12.8", features = ["future"] }
 quickcheck = "1.0.3"
 url = "2.5.2"
+get-size = "0.1.4"

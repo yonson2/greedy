@@ -29,7 +29,7 @@ impl Config {
             .add_source(File::with_name(&format!("config/{run_mode}")).required(false))
             .add_source(File::with_name("config/local").required(false))
             .add_source(
-                config::Environment::with_prefix("APP")
+                config::Environment::with_prefix("GREEDY")
                     .try_parsing(true)
                     .separator("_")
                     .list_separator(" "),

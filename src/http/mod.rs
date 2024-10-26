@@ -1,12 +1,14 @@
 mod processor;
+mod stats;
 
 use crate::{
     cache::{self, Cache},
     config::Config,
 };
-use axum::{http::StatusCode, routing::get, Json, Router};
+use axum::{extract::FromRef, http::StatusCode, routing::get, Json, Router};
 use processor::{preload, process_and_serve};
 use serde::{Deserialize, Serialize};
+use stats::stats;
 use tower_http::trace::TraceLayer;
 
 pub type Result<T, E = crate::error::Error> = std::result::Result<T, E>;
@@ -40,6 +42,7 @@ fn routes(state: ApiState) -> Router {
         .route("/", get(index))
         .route("/*url", get(process_and_serve))
         .route("/preload/*url", get(preload))
+        .route("/stats", get(stats))
         .with_state(state)
 }
 
@@ -61,4 +64,10 @@ pub struct ApiMessage {
 pub struct ApiState {
     pub whitelist: Vec<String>,
     pub cache: Cache,
+}
+
+impl FromRef<ApiState> for Cache {
+    fn from_ref(state: &ApiState) -> Self {
+        state.cache.clone()
+    }
 }
