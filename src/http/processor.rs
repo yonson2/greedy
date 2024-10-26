@@ -43,7 +43,11 @@ pub async fn process_and_serve(
     } else {
         guess_content_type(&data)?
     };
-    let headers = [(header::CONTENT_TYPE, content_type)];
+    let headers = [
+        (header::CACHE_CONTROL, "max-age=31536000".to_string()),
+        (header::CONTENT_TYPE, content_type),
+    ];
+
     Ok((StatusCode::OK, headers, data))
 }
 
